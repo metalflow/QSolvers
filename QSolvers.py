@@ -2,13 +2,14 @@
 import numpy
 
 #define constants
-NUM_ESPISODE=2
+NUM_ESPISODE=1000
 NUM_ACTIONS=100
 EPISODE_GROUP_SIZE=100
+OUTPUT_FILE_NAME="stats.csv"
 
 #initialize variables
 TotalEpisodeReward=0
-TotalReward=[0*NUM_ESPISODE]
+rewardPerGroup=0
 
 #define classes
 #data class for the world
@@ -179,7 +180,7 @@ class Robot(World):
         self.centerLocation = str(self.parentWorld.grid[self.coords[0]][self.coords[1]])
         return
 
-    def takeAction(self):
+    def takeAction(self)->int:
         #analyze percept
         #check all members of the percept to ensure percept is correctly formed
         #if a member is not a defined Location desriptor character, raise
@@ -218,11 +219,9 @@ class Robot(World):
         else:
             raise Exception("action "+str(action)+" is not a member of allowed ACTIONS:"+str(self.ACTIONS))
 
-        #
-
         #update the QMap with the reward (if greater than the current value)
 
-        return
+        return reward
 
     def _checkQMap(self):
         action = self.ACTIONS[4] #just a dummy action for now
@@ -265,6 +264,13 @@ class Robot(World):
 #define functions
 
 #begin main program
+#open stats file if defined
+if (type(OUTPUT_FILE_NAME) == str)&(OUTPUT_FILE_NAME != ""):
+    statsFile=open(OUTPUT_FILE_NAME,"w")
+    statsFile.write("Episode,totalReward\n")
+    print(OUTPUT_FILE_NAME+" opened for writing.")
+else:
+    statsFile=None
 #make a world
 currentWorld=World()
 #add a robot to that world
@@ -282,22 +288,26 @@ for episodeCount in range(0,NUM_ESPISODE):
         #have robot(s) look around
         for bot in currentWorld.robots:
             bot.lookAround()
-        #have robot(s) take actions
+        #have robot(s) take actions and add reward (if any) to TotalEpisodeReward
         for bot in currentWorld.robots:
-            bot.takeAction()
-            #add reward (if any) to TotalEpisodeReward
+            TotalEpisodeReward += bot.takeAction()
         #print out world for human monitoring
-        print("Episode number:"+str(episodeCount)+" action number:"+str(actionCount))
-        currentWorld.displayWorld()
+        #print("Episode number:"+str(episodeCount)+" action number:"+str(actionCount))
+        #currentWorld.displayWorld()
     #log total reward gathered
-
+    if statsFile != None:
+        statsFile.write(str(episodeCount)+","+str(TotalEpisodeReward)+"\n")
+    rewardPerGroup+=TotalEpisodeReward
     #reduce GreedFactor by (STARTING_GREED_FACTOR/NUM_ESPISODE)
     for bot in currentWorld.robots:
         bot.GreedFactor=bot.GreedFactor-(bot.STARTING_GREED_FACTOR/NUM_ESPISODE)
     #print out world for human monitoring
-    print("Episode number:"+str(episodeCount))
-    currentWorld.displayWorld()
+    #print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
+    #currentWorld.displayWorld()
     #every EPISODE_GROUP_SIZEth episode, print the total reward divided by EPISODE_GROUP_SIZE
+    if episodeCount%100 == 0:
+        print("Average Reward over the last "+str(EPISODE_GROUP_SIZE)+" episodes:"+str(rewardPerGroup/EPISODE_GROUP_SIZE))
+        rewardPerGroup = 0
 
 
 #start test episode loop
@@ -310,3 +320,4 @@ for episodeCount in range(0,NUM_ESPISODE):
     #log total reward gathered
     #every EPISODE_GROUP_SIZEth episode, print the total reward divided by EPISODE_GROUP_SIZE
 #clean up
+statsFile.close()
