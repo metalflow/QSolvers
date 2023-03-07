@@ -2,6 +2,9 @@
 import numpy
 
 #define constants
+NUM_ESPISODE=1000
+NUM_ACTIONS=100
+EPISODE_GROUP_SIZE=100
 
 #initialize variables
 
@@ -22,9 +25,9 @@ class World:
 
     #methods
     def reset(self):
-        oldBots = self.robots.copy()
-        del self.robots
-        self.robots=[]
+        #oldBots = self.robots.copy()
+        #del self.robots
+        #self.robots=[]
         emptyBotLocations=[]
         #repopulate cans
         for y in range(self.MAPLENGTH):
@@ -41,16 +44,22 @@ class World:
                 #ensure no wall is popualated
                 self.grid[x][y].Wall=None
         #randomly place robots
-        while len(oldBots)>0:
-            oldBot=oldBots.pop()
+        for oldBot in self.robots:
             oldBot.reset()
             #pick a new place from the list of open places to place robots
             randIndex=numpy.random.randint(0,len(emptyBotLocations)-1)
             coordSet=emptyBotLocations.pop(randIndex)
             oldBot.place(coordSet[0],coordSet[1])
-            #add the oldBot back into the list of robots
-            self.robots.append(oldBot)
-        del oldBots
+        #while len(oldBots)>0:
+        #    oldBot=oldBots.pop()
+        #    oldBot.reset()
+        #    #pick a new place from the list of open places to place robots
+        #    randIndex=numpy.random.randint(0,len(emptyBotLocations)-1)
+        #    coordSet=emptyBotLocations.pop(randIndex)
+        #    oldBot.place(coordSet[0],coordSet[1])
+        #    #add the oldBot back into the list of robots
+        #    self.robots.append(oldBot)
+        #del oldBots
         return
 
     def displayWorld(self):
@@ -65,8 +74,10 @@ class World:
 class Location(World):
     #Class Constants
     STATES=["_","C","R","W"]
+    
 
     #class variables
+    
 
     #constructor
     def __init__(self):
@@ -93,8 +104,11 @@ class Robot(World):
     PICK_UP_NOTHING=-1
     PICKUP_CAN=10
     MINIMUM_REWARD=-10
+    DISCOUT_FACTOR=0.2
+    STARTING_GREED_FACTOR=0.1
 
     #class variables
+    GreedFactor = STARTING_GREED_FACTOR
 
     #constructor
     def __init__(self):
@@ -194,7 +208,25 @@ class Robot(World):
 #define functions
 
 #begin main program
-
-
-
+#make a world
+#add a robot to that world
+#start training episode loop
+    #reset world
+    #reset robots
+    #begin actions loop
+        #have robot(s) look around
+        #have robot(s) take actions
+    #log total reward gathered
+    #reduce GreedFactor by (STARTING_GREED_FACTOR/NUM_ESPISODE)
+    #every EPISODE_GROUP_SIZEth episode, print the total reward divided by EPISODE_GROUP_SIZE
+    #decrease 
+#start test episode loop
+    #set GreedFactor to STARTING_GREED_FACTOR
+    #reset world
+    #reset robots
+    #begin actions loop
+        #have robot(s) look around
+        #have robot(s) take actions
+    #log total reward gathered
+    #every EPISODE_GROUP_SIZEth episode, print the total reward divided by EPISODE_GROUP_SIZE
 #clean up
