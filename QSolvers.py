@@ -266,7 +266,7 @@ class Robot(World):
 #begin main program
 #open stats file if defined
 if (type(OUTPUT_FILE_NAME) == str)&(OUTPUT_FILE_NAME != ""):
-    statsFile=open(OUTPUT_FILE_NAME,"w")
+    statsFile=open("TRAINING"+OUTPUT_FILE_NAME,"w")
     statsFile.write("Episode,totalReward\n")
     print(OUTPUT_FILE_NAME+" opened for writing.")
 else:
@@ -308,7 +308,8 @@ for episodeCount in range(0,NUM_ESPISODE):
     if episodeCount%100 == 0:
         print("Average Reward over the last "+str(EPISODE_GROUP_SIZE)+" episodes:"+str(rewardPerGroup/EPISODE_GROUP_SIZE))
         rewardPerGroup = 0
-
+#clean up
+statsFile.close()
 
 #start test episode loop
     #set GreedFactor to STARTING_GREED_FACTOR
