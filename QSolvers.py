@@ -1,5 +1,5 @@
 #imports
-import numpy
+import numpy,pprint
 
 #define constants
 NUM_ESPISODE=1000
@@ -61,16 +61,6 @@ class World:
             randIndex=numpy.random.randint(0,len(emptyBotLocations)-1)
             coordSet=emptyBotLocations.pop(randIndex)
             oldBot.place(coordSet[0],coordSet[1])
-        #while len(oldBots)>0:
-        #    oldBot=oldBots.pop()
-        #    oldBot.reset()
-        #    #pick a new place from the list of open places to place robots
-        #    randIndex=numpy.random.randint(0,len(emptyBotLocations)-1)
-        #    coordSet=emptyBotLocations.pop(randIndex)
-        #    oldBot.place(coordSet[0],coordSet[1])
-        #    #add the oldBot back into the list of robots
-        #    self.robots.append(oldBot)
-        #del oldBots
         return
 
     def displayWorld(self):
@@ -115,6 +105,7 @@ class Robot(World):
     MINIMUM_REWARD=-10
     DISCOUNT_FACTOR=0.2
     STARTING_GREED_FACTOR=0.1
+    EMPTY_PERCEPT=[-10 for _ in range(len(ACTIONS))]
 
     #class variables
 
@@ -128,8 +119,10 @@ class Robot(World):
         self.southLocation = ""
         self.westLocation = ""
         self.centerLocation = ""
+        self.currentPercept = ""
+        self.previousPercept = ""
         #QMap reads as follows [north],[east],[south],[west],[center],[action]=reward
-        self.QMap = []
+        self.QMap = dict()
         return
 
     #methods
@@ -140,6 +133,8 @@ class Robot(World):
         self.southLocation = ""
         self.westLocation = ""
         self.centerLocation = ""
+        self.currentPercept = ""
+        self.previousPercept = ""
         #QMap does *not* get reset between runs
         return
 
@@ -150,34 +145,42 @@ class Robot(World):
         self.coords=numpy.array([x,y])
         #place robot in new Location
         self.parentWorld.grid[self.coords[0]][self.coords[1]].Robot=self
+        #update percept state
+        self.lookAround()
         return
 
     def lookAround(self):
         #if looking outside the edge of the map, return Wall...
-        if (self.coords[1]-1)>0:
+        if (self.coords[1]-1)>=0:
             self.northLocation = str(self.parentWorld.grid[self.coords[0]][self.coords[1]-1])
         #otherwise return the value of the Location
         else:
             self.northLocation = Location.STATES[3]
         #if looking outside the edge of the map, return Wall...
-        if (self.coords[0]+1)<(self.parentWorld.MAPWIDTH-1):
+        if (self.coords[0]+1)<=(self.parentWorld.MAPWIDTH-1):
             self.eastLocation = str(self.parentWorld.grid[self.coords[0]+1][self.coords[1]])
         #otherwise return the value of the Location
         else:
             self.eastLocation = Location.STATES[3]
         #if looking outside the edge of the map, return Wall...
-        if (self.coords[1]+1)<(self.parentWorld.MAPLENGTH-1):
+        if (self.coords[1]+1)<=(self.parentWorld.MAPLENGTH-1):
             self.southLocation = str(self.parentWorld.grid[self.coords[0]][self.coords[1]+1])
         #otherwise return the value of the Location
         else:
             self.southLocation = Location.STATES[3]
         #if looking outside the edge of the map, return Wall...
-        if (self.coords[0]-1)>0:
+        if (self.coords[0]-1)>=0:
             self.westLocation = str(self.parentWorld.grid[self.coords[0]-1][self.coords[1]])
         #otherwise return the value of the Location
         else:
             self.westLocation = Location.STATES[3]
-        self.centerLocation = str(self.parentWorld.grid[self.coords[0]][self.coords[1]])
+        if self.parentWorld.grid[self.coords[0]][self.coords[1]].Can:
+            self.centerLocation = Location.STATES[1]
+        else:
+            self.centerLocation = Location.STATES[0]
+        #self.centerLocation = str(self.parentWorld.grid[self.coords[0]][self.coords[1]])
+        #self.previousPercept = self.currentPercept
+        self.currentPercept = self.northLocation+self.eastLocation+self.southLocation+self.westLocation+self.centerLocation
         return
 
     def takeAction(self)->int:
@@ -195,6 +198,9 @@ class Robot(World):
             raise Exception("westLocation is not a valid location")
         elif Location.STATES.count(self.centerLocation) == 0:
             raise Exception("centerLocation is not a valid location")
+
+        #store current percept as oldPercept
+        previousPercept = self.currentPercept
 
         #determine if we should take a random action
         if numpy.random.random()<self.GreedFactor:
@@ -217,21 +223,40 @@ class Robot(World):
         elif action == self.ACTIONS[4]:
             reward = self._pickup()
         else:
-            raise Exception("action "+str(action)+" is not a member of allowed ACTIONS:"+str(self.ACTIONS))
+            raise Exception("action "+action+" is not a member of allowed ACTIONS:"+str(self.ACTIONS))
 
-        #update the QMap with the reward (if greater than the current value)
+        #log reward to current action if greater than current
+        if reward > self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]:
+            self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT)[self.ACTIONS.index(action)] = reward
+        #self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT)[self.ACTIONS.index(action)] += reward
+
+        #observe new state
+        self.lookAround()
+
+        #update QMAP
+        discountedMaxReward = max(self.QMap.setdefault(self.currentPercept,self.EMPTY_PERCEPT.copy()))*self.DISCOUNT_FACTOR
+        currentlyListedReward = self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]
+        #if the maximum stored reward (times discount) at the current state is greater that the stored reward for the action taken
+        if discountedMaxReward > currentlyListedReward:
+            #then update previous percepts action element with new discounted value
+            actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
+            actionList[self.ACTIONS.index(action)]=discountedMaxReward
+            self.QMap.update({previousPercept:actionList})
+        #actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
+        #actionList[self.ACTIONS.index(action)]+=discountedMaxReward
+        #self.QMap.update({previousPercept:actionList})
 
         return reward
 
     def _checkQMap(self):
-        action = self.ACTIONS[4] #just a dummy action for now
         #find maximum QMap entry for the current location
-        #find the maximum QMap entry for the adjacent locations
-        #if the discounted adjacent reward are greater than the current reward
-            #update the current location with a move to adjacent command
-            #return move to adjacent command
-        #return the current location command
-        return action
+        actionList = self.QMap.setdefault(self.currentPercept,self.EMPTY_PERCEPT.copy())
+        #determine if any of these actions have a positive reward
+        if max(actionList) > 0:
+            #return that if it exists
+            return self.ACTIONS[actionList.index(max(actionList))]
+        else:
+            return self.ACTIONS[numpy.random.randint(0,len(self.ACTIONS))]
 
     def _move(self,newX:int,newY:int)->int:
         #check to see of attempting to move out of bounds
@@ -274,7 +299,7 @@ else:
 #make a world
 currentWorld=World()
 #add a robot to that world
-currentWorld.addBot()
+currentBot = currentWorld.addBot()
 #start training episode loop
 for episodeCount in range(0,NUM_ESPISODE):
     #reset world
@@ -288,9 +313,12 @@ for episodeCount in range(0,NUM_ESPISODE):
         #have robot(s) look around
         for bot in currentWorld.robots:
             bot.lookAround()
-        #have robot(s) take actions and add reward (if any) to TotalEpisodeReward
+        #have robot(s) take actions and 
         for bot in currentWorld.robots:
+            #add reward (if any) to TotalEpisodeReward
             TotalEpisodeReward += bot.takeAction()
+            #update QMap
+
         #print out world for human monitoring
         #print("Episode number:"+str(episodeCount)+" action number:"+str(actionCount))
         #currentWorld.displayWorld()
@@ -302,8 +330,11 @@ for episodeCount in range(0,NUM_ESPISODE):
     for bot in currentWorld.robots:
         bot.GreedFactor=bot.GreedFactor-(bot.STARTING_GREED_FACTOR/NUM_ESPISODE)
     #print out world for human monitoring
-    #print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
-    #currentWorld.displayWorld()
+    print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
+    currentWorld.displayWorld()
+    #print QMap for each bot
+    #for bot in currentWorld.robots:
+    #    pprint.pprint(bot.QMap)
     #every EPISODE_GROUP_SIZEth episode, print the total reward divided by EPISODE_GROUP_SIZE
     if episodeCount%100 == 0:
         print("Average Reward over the last "+str(EPISODE_GROUP_SIZE)+" episodes:"+str(rewardPerGroup/EPISODE_GROUP_SIZE))
