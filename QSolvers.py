@@ -2,8 +2,8 @@
 import numpy,pprint
 
 #define constants
-NUM_ESPISODE=1000
-NUM_ACTIONS=100
+NUM_ESPISODE=5000
+NUM_ACTIONS=200
 EPISODE_GROUP_SIZE=100
 OUTPUT_FILE_NAME="stats.csv"
 
@@ -105,7 +105,8 @@ class Robot(World):
     MINIMUM_REWARD=-10
     DISCOUNT_FACTOR=0.2
     STARTING_GREED_FACTOR=0.1
-    EMPTY_PERCEPT=[-10 for _ in range(len(ACTIONS))]
+    MAX_FACTOR = 0.9
+    EMPTY_PERCEPT=[0,0,0,0,0]
 
     #class variables
 
@@ -120,7 +121,6 @@ class Robot(World):
         self.westLocation = ""
         self.centerLocation = ""
         self.currentPercept = ""
-        self.previousPercept = ""
         #QMap reads as follows [north],[east],[south],[west],[center],[action]=reward
         self.QMap = dict()
         return
@@ -134,7 +134,6 @@ class Robot(World):
         self.westLocation = ""
         self.centerLocation = ""
         self.currentPercept = ""
-        self.previousPercept = ""
         #QMap does *not* get reset between runs
         return
 
@@ -226,22 +225,28 @@ class Robot(World):
             raise Exception("action "+action+" is not a member of allowed ACTIONS:"+str(self.ACTIONS))
 
         #log reward to current action if greater than current
-        if reward > self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]:
-            self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT)[self.ACTIONS.index(action)] = reward
-        #self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT)[self.ACTIONS.index(action)] += reward
+        #if reward > self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]:
+        #    self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT)[self.ACTIONS.index(action)] = reward
 
         #observe new state
         self.lookAround()
 
         #update QMAP
-        discountedMaxReward = max(self.QMap.setdefault(self.currentPercept,self.EMPTY_PERCEPT.copy()))*self.DISCOUNT_FACTOR
-        currentlyListedReward = self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]
+        previousQMap = self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())
+        currentQMap = self.QMap.get(self.currentPercept,self.EMPTY_PERCEPT.copy())
+        previousReward = previousQMap[self.ACTIONS.index(action)]
+        modifier = reward + (self.MAX_FACTOR*max(currentQMap)-previousReward)
+        previousQMap[self.ACTIONS.index(action)] = previousReward + (self.DISCOUNT_FACTOR * modifier)
+        self.QMap.update({previousPercept:previousQMap})
+
+        #discountedMaxReward = max(self.QMap.setdefault(self.currentPercept,self.EMPTY_PERCEPT.copy()))*self.DISCOUNT_FACTOR
+        #currentlyListedReward = self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]
         #if the maximum stored reward (times discount) at the current state is greater that the stored reward for the action taken
-        if discountedMaxReward > currentlyListedReward:
-            #then update previous percepts action element with new discounted value
-            actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
-            actionList[self.ACTIONS.index(action)]=discountedMaxReward
-            self.QMap.update({previousPercept:actionList})
+        #if discountedMaxReward > currentlyListedReward:
+        #    #then update previous percepts action element with new discounted value
+        #    actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
+        #    actionList[self.ACTIONS.index(action)]=discountedMaxReward
+        #    self.QMap.update({previousPercept:actionList})
         #actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
         #actionList[self.ACTIONS.index(action)]+=discountedMaxReward
         #self.QMap.update({previousPercept:actionList})
@@ -252,7 +257,7 @@ class Robot(World):
         #find maximum QMap entry for the current location
         actionList = self.QMap.setdefault(self.currentPercept,self.EMPTY_PERCEPT.copy())
         #determine if any of these actions have a positive reward
-        if max(actionList) > 0:
+        if max(actionList) > self.MINIMUM_REWARD:
             #return that if it exists
             return self.ACTIONS[actionList.index(max(actionList))]
         else:
@@ -293,7 +298,7 @@ class Robot(World):
 if (type(OUTPUT_FILE_NAME) == str)&(OUTPUT_FILE_NAME != ""):
     statsFile=open("TRAINING"+OUTPUT_FILE_NAME,"w")
     statsFile.write("Episode,totalReward\n")
-    print(OUTPUT_FILE_NAME+" opened for writing.")
+    print(statsFile.name+" opened for writing.")
 else:
     statsFile=None
 #make a world
@@ -330,8 +335,8 @@ for episodeCount in range(0,NUM_ESPISODE):
     for bot in currentWorld.robots:
         bot.GreedFactor=bot.GreedFactor-(bot.STARTING_GREED_FACTOR/NUM_ESPISODE)
     #print out world for human monitoring
-    print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
-    currentWorld.displayWorld()
+    #print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
+    #currentWorld.displayWorld()
     #print QMap for each bot
     #for bot in currentWorld.robots:
     #    pprint.pprint(bot.QMap)
@@ -339,6 +344,10 @@ for episodeCount in range(0,NUM_ESPISODE):
     if episodeCount%100 == 0:
         print("Average Reward over the last "+str(EPISODE_GROUP_SIZE)+" episodes:"+str(rewardPerGroup/EPISODE_GROUP_SIZE))
         rewardPerGroup = 0
+        #for bot in currentWorld.robots:
+        #    pprint.pprint(bot.QMap)
+for bot in currentWorld.robots:
+    pprint.pprint(bot.QMap)
 #clean up
 statsFile.close()
 

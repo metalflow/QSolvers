@@ -26,6 +26,7 @@
   <ItemGroup>
     <Content Include="441 541 AI programming Assignment 3 Winter 2023.pdf" />
     <Content Include="stats.csv" />
+    <Content Include="TRAININGstats.csv" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
