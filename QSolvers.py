@@ -202,7 +202,7 @@ class Robot(World):
         previousPercept = self.currentPercept
 
         #determine if we should take a random action
-        if numpy.random.random()<self.GreedFactor:
+        if numpy.random.random()>self.GreedFactor:
             #if not
             #Examine QMap for known actions
             action = self._checkQMap()
