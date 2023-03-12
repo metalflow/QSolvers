@@ -25,7 +25,8 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="441 541 AI programming Assignment 3 Winter 2023.pdf" />
-    <Content Include="stats.csv" />
+    <Content Include="botQMap.csv" />
+    <Content Include="TESTstats.csv" />
     <Content Include="TRAININGstats.csv" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

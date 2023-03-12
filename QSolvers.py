@@ -105,7 +105,7 @@ class Robot(World):
     MINIMUM_REWARD=-10
     DISCOUNT_FACTOR=0.2
     STARTING_GREED_FACTOR=0.1
-    MAX_FACTOR = 0.9
+    LEARNING_FACTOR = 0.9
     EMPTY_PERCEPT=[0,0,0,0,0]
 
     #class variables
@@ -173,12 +173,12 @@ class Robot(World):
         #otherwise return the value of the Location
         else:
             self.westLocation = Location.STATES[3]
+        #if looking outside the edge of the map, return Wall...
         if self.parentWorld.grid[self.coords[0]][self.coords[1]].Can:
             self.centerLocation = Location.STATES[1]
+        #otherwise return the value of either the Can or Empty
         else:
             self.centerLocation = Location.STATES[0]
-        #self.centerLocation = str(self.parentWorld.grid[self.coords[0]][self.coords[1]])
-        #self.previousPercept = self.currentPercept
         self.currentPercept = self.northLocation+self.eastLocation+self.southLocation+self.westLocation+self.centerLocation
         return
 
@@ -224,10 +224,6 @@ class Robot(World):
         else:
             raise Exception("action "+action+" is not a member of allowed ACTIONS:"+str(self.ACTIONS))
 
-        #log reward to current action if greater than current
-        #if reward > self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]:
-        #    self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT)[self.ACTIONS.index(action)] = reward
-
         #observe new state
         self.lookAround()
 
@@ -235,21 +231,9 @@ class Robot(World):
         previousQMap = self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())
         currentQMap = self.QMap.get(self.currentPercept,self.EMPTY_PERCEPT.copy())
         previousReward = previousQMap[self.ACTIONS.index(action)]
-        modifier = reward + (self.MAX_FACTOR*max(currentQMap)-previousReward)
-        previousQMap[self.ACTIONS.index(action)] = previousReward + (self.DISCOUNT_FACTOR * modifier)
+        modifier = reward + (self.DISCOUNT_FACTOR*max(currentQMap)-previousReward)
+        previousQMap[self.ACTIONS.index(action)] = previousReward + (self.LEARNING_FACTOR * modifier)
         self.QMap.update({previousPercept:previousQMap})
-
-        #discountedMaxReward = max(self.QMap.setdefault(self.currentPercept,self.EMPTY_PERCEPT.copy()))*self.DISCOUNT_FACTOR
-        #currentlyListedReward = self.QMap.setdefault(previousPercept,self.EMPTY_PERCEPT.copy())[self.ACTIONS.index(action)]
-        #if the maximum stored reward (times discount) at the current state is greater that the stored reward for the action taken
-        #if discountedMaxReward > currentlyListedReward:
-        #    #then update previous percepts action element with new discounted value
-        #    actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
-        #    actionList[self.ACTIONS.index(action)]=discountedMaxReward
-        #    self.QMap.update({previousPercept:actionList})
-        #actionList = self.QMap.get(previousPercept,self.EMPTY_PERCEPT.copy())
-        #actionList[self.ACTIONS.index(action)]+=discountedMaxReward
-        #self.QMap.update({previousPercept:actionList})
 
         return reward
 
@@ -322,8 +306,6 @@ for episodeCount in range(0,NUM_ESPISODE):
         for bot in currentWorld.robots:
             #add reward (if any) to TotalEpisodeReward
             TotalEpisodeReward += bot.takeAction()
-            #update QMap
-
         #print out world for human monitoring
         #print("Episode number:"+str(episodeCount)+" action number:"+str(actionCount))
         #currentWorld.displayWorld()
@@ -332,8 +314,12 @@ for episodeCount in range(0,NUM_ESPISODE):
         statsFile.write(str(episodeCount)+","+str(TotalEpisodeReward)+"\n")
     rewardPerGroup+=TotalEpisodeReward
     #reduce GreedFactor by (STARTING_GREED_FACTOR/NUM_ESPISODE)
-    for bot in currentWorld.robots:
-        bot.GreedFactor=bot.GreedFactor-(bot.STARTING_GREED_FACTOR/NUM_ESPISODE)
+    if episodeCount%50 == 0:
+        for bot in currentWorld.robots:
+            if bot.GreedFactor > 0:
+                bot.GreedFactor=bot.GreedFactor-(bot.STARTING_GREED_FACTOR/NUM_ESPISODE)
+            else:
+                bot.GreedFactor=0
     #print out world for human monitoring
     #print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
     #currentWorld.displayWorld()
@@ -346,19 +332,63 @@ for episodeCount in range(0,NUM_ESPISODE):
         rewardPerGroup = 0
         #for bot in currentWorld.robots:
         #    pprint.pprint(bot.QMap)
+#log QMaps for posterity
+QMapFile=open("botQMap.csv","w")
+botNumber=1
 for bot in currentWorld.robots:
-    pprint.pprint(bot.QMap)
+    QMapFile.write("botNumber,percept,GONORTH,GOEAST,GOSOUTH,GOWEST,PICKUP\n")
+    for state in bot.QMap:
+        actions=bot.QMap.get(state)
+        QMapFile.write(str(botNumber)+","+state+","+str(actions[0])+","+str(actions[1])+","+str(actions[2])+","+str(actions[3])+","+str(actions[4])+"\n")
+print("QMap logged to "+QMapFile.name)
 #clean up
+QMapFile.close()
 statsFile.close()
 
 #start test episode loop
-    #set GreedFactor to STARTING_GREED_FACTOR
+#open stats file if defined
+if (type(OUTPUT_FILE_NAME) == str)&(OUTPUT_FILE_NAME != ""):
+    statsFile=open("TEST"+OUTPUT_FILE_NAME,"w")
+    statsFile.write("Episode,totalReward\n")
+    print(statsFile.name+" opened for writing.")
+else:
+    statsFile=None
+#reset the world
+currentWorld.reset()
+#add a robot to that world
+#should already be added
+#start training episode loop
+for episodeCount in range(0,NUM_ESPISODE):
     #reset world
+    currentWorld.reset()
     #reset robots
+    #should be handled by world reset
+    #reset reward TotalEpisodeReward
+    TotalEpisodeReward = 0
     #begin actions loop
+    for actionCount in range(0,NUM_ACTIONS):
         #have robot(s) look around
-        #have robot(s) take actions
+        for bot in currentWorld.robots:
+            bot.lookAround()
+        #have robot(s) take actions and 
+        for bot in currentWorld.robots:
+            #add reward (if any) to TotalEpisodeReward
+            TotalEpisodeReward += bot.takeAction()
+        #print out world for human monitoring
+        #print("Episode number:"+str(episodeCount)+" action number:"+str(actionCount))
+        #currentWorld.displayWorld()
     #log total reward gathered
+    if statsFile != None:
+        statsFile.write(str(episodeCount)+","+str(TotalEpisodeReward)+"\n")
+    rewardPerGroup+=TotalEpisodeReward
+    #print out world for human monitoring
+    #print("Episode number:"+str(episodeCount)+" reward gathered:"+str(TotalEpisodeReward))
+    #currentWorld.displayWorld()
     #every EPISODE_GROUP_SIZEth episode, print the total reward divided by EPISODE_GROUP_SIZE
+    if episodeCount%100 == 0:
+        print("Average Reward over the last "+str(EPISODE_GROUP_SIZE)+" episodes:"+str(rewardPerGroup/EPISODE_GROUP_SIZE))
+        rewardPerGroup = 0
+        #for bot in currentWorld.robots:
+        #    pprint.pprint(bot.QMap)
 #clean up
 statsFile.close()
